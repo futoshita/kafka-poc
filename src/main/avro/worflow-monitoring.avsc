@@ -1,0 +1,13 @@
+{"namespace": "com.futoshita.kafka.poc.scheduler.monitoring",
+ "type": "record",
+ "name": "MonitoringMessage",
+ "fields": [
+     {"name": "workflow_name", "type": "string"},
+     {"name": "step_name", "type": "string"},
+     {"name": "status", "type": "string"},
+     {"name": "start_time", "type": "string"},
+     {"name": "end_time", "type": ["string", "null"]},
+     {"name": "duration", "type": ["string", "null"]},
+     {"name": "message", "type": ["string", "null"]}
+ ]
+}
