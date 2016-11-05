@@ -1,28 +1,43 @@
 package com.futoshita.kafka.poc.scheduler.monitoring;
 
-import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
-import org.apache.avro.generic.GenericDatumWriter;
-import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.BinaryEncoder;
-import org.apache.avro.io.EncoderFactory;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.futoshita.kafka.util.KafkaIOUtil;
+
 
 public class Producer {
   
   private static final Logger LOGGER = LoggerFactory.getLogger(Producer.class);
+  private KafkaProducer<String, byte[]> producer;
   
   
-  public static void run(String topicName, MonitoringMessage message) {
-    KafkaProducer<String, byte[]> producer = null;
+  private static class ProducerHolder {
     
+    private final static Producer instance = new Producer();
+  }
+  
+  
+  public static Producer getInstance() {
+    return ProducerHolder.instance;
+  }
+  
+  
+  public void close() {
+    if (null != producer) {
+      producer.close();
+    }
+  }
+  
+  
+  public void init() {
     try {
       Properties properties = new Properties();
       
@@ -31,21 +46,16 @@ public class Producer {
       in.close();
       
       producer = new KafkaProducer<>(properties);
-      
-      GenericDatumWriter<GenericRecord> writer = new GenericDatumWriter<GenericRecord>(MonitoringMessage.SCHEMA$);
-      ByteArrayOutputStream os = new ByteArrayOutputStream();
-      
-      BinaryEncoder e = EncoderFactory.get().binaryEncoder(os, null);
-      writer.write(message, e);
-      e.flush();
-      byte[] byteData = os.toByteArray();
-      os.close();
-      
-      producer.send(new ProducerRecord<String, byte[]>(topicName, byteData));
     } catch (Exception e) {
       LOGGER.error(e.getMessage(), e);
-    } finally {
-      producer.close();
+    }
+  }
+  
+  public void send(String topicName, MonitoringMessage message) {
+    try {
+      producer.send(new ProducerRecord<String, byte[]>(topicName, KafkaIOUtil.writeBytes(message, MonitoringMessage.getClassSchema())));
+    } catch (IOException e) {
+      LOGGER.error(e.getMessage(), e);
     }
   }
   

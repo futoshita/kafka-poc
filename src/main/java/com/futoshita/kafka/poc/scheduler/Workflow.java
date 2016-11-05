@@ -1,22 +1,24 @@
 package com.futoshita.kafka.poc.scheduler;
 
-import java.util.Locale;
 import java.util.Random;
 
 import org.joda.time.DateTime;
-import org.joda.time.Interval;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.futoshita.kafka.poc.scheduler.monitoring.MonitoringMessage;
 import com.futoshita.kafka.poc.scheduler.monitoring.Producer;
+import com.futoshita.kafka.util.DateUtil;
 
 
 public class Workflow extends Thread {
   
   private final Logger LOGGER = LoggerFactory.getLogger(Workflow.class);
+  
   private final int MIN_STEP_DELAY = 100;
   private final int MAX_STEP_DELAY = 1000;
+  private final int MIN_STEPS_NUMBER = 2;
+  private final int MAX_STEPS_NUMBER = 12;
   private final String KAFKA_TOPIC = "mock-scheduler";
   
   private double errorRate = -1;
@@ -48,16 +50,22 @@ public class Workflow extends Thread {
   }
   
   private int getStepsNumber() {
-    return 4;
+    return new Random().nextInt(MAX_STEPS_NUMBER - MIN_STEPS_NUMBER + 1) + MIN_STEPS_NUMBER;
   }
   
   @Override
   public void run() {
-    for (int i = 0; i < getStepsNumber(); i++) {
+    DateTime workflowStartTime = new DateTime();
+    Producer.getInstance().send(KAFKA_TOPIC, new MonitoringMessage(getName(), "start", 0, "successful", DateUtil.formatDateTime(workflowStartTime), null, null, null));
+    
+    int stepsNumber = getStepsNumber();
+    
+    boolean onError = false;
+    for (int i = 0; i < stepsNumber; i++) {
       DateTime startTime = new DateTime();
       
       if (LOGGER.isDebugEnabled()) {
-        LOGGER.debug("starting workflow {} step {}: {}", getName(), (i + 1), startTime.toString("dd-MMM-yyyy HH:mm:ss.SSS", Locale.ENGLISH));
+        LOGGER.debug("starting workflow {} step {}: {}", getName(), (i + 1), DateUtil.formatDateTime(startTime));
       }
       
       try {
@@ -71,30 +79,36 @@ public class Workflow extends Thread {
         }
         
         DateTime endTime = new DateTime();
-        long duration = new Interval(startTime, endTime).toDurationMillis();
+        long duration = DateUtil.getDuration(startTime, endTime);
         
         if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("stopping workflow {} step {}: {}", getName(), (i + 1), endTime.toString("dd-MMM-yyyy HH:mm:ss.SSS", Locale.ENGLISH));
+          LOGGER.debug("stopping workflow {} step {}: {}", getName(), (i + 1), DateUtil.formatDateTime(endTime));
           LOGGER.debug("workflow {} step {} duration: {} ms", getName(), (i + 1), duration);
         }
         
-        Producer.run(KAFKA_TOPIC, new MonitoringMessage(getName(), String.valueOf(i + 1), "successful", startTime.toString("dd-MMM-yyyy HH:mm:ss.SSS", Locale.ENGLISH),
-            endTime.toString("dd-MMM-yyyy HH:mm:ss.SSS", Locale.ENGLISH), String.valueOf(duration), null));
+        Producer.getInstance().send(KAFKA_TOPIC,
+            new MonitoringMessage(getName(), String.valueOf(i + 1), (i + 1), "successful", DateUtil.formatDateTime(startTime), DateUtil.formatDateTime(endTime), duration, null));
       } catch (InterruptedException e) {
         LOGGER.error(e.getMessage(), e);
         
+        onError = true;
+        
         DateTime endTime = new DateTime();
-        long duration = new Interval(startTime, endTime).toDurationMillis();
+        long duration = DateUtil.getDuration(startTime, endTime);
         
         if (LOGGER.isDebugEnabled()) {
-          LOGGER.debug("stopping workflow {} step {}: {}", getName(), (i + 1), endTime.toString("dd-MMM-yyyy HH:mm:ss.SSS", Locale.ENGLISH));
+          LOGGER.debug("stopping workflow {} step {}: {}", getName(), (i + 1), DateUtil.formatDateTime(endTime));
           LOGGER.debug("workflow {} step {} duration: {} ms", getName(), (i + 1), duration);
         }
         
-        Producer.run(KAFKA_TOPIC, new MonitoringMessage(getName(), String.valueOf(i + 1), "error", startTime.toString("dd-MMM-yyyy HH:mm:ss.SSS", Locale.ENGLISH),
-            endTime.toString("dd-MMM-yyyy HH:mm:ss.SSS", Locale.ENGLISH), String.valueOf(duration), e.getMessage()));
+        Producer.getInstance().send(KAFKA_TOPIC,
+            new MonitoringMessage(getName(), String.valueOf(i + 1), (i + 1), "error", DateUtil.formatDateTime(startTime), DateUtil.formatDateTime(endTime), duration, e.getMessage()));
         break;
       }
     }
+    
+    DateTime workflowEndTime = new DateTime();
+    Producer.getInstance().send(KAFKA_TOPIC, new MonitoringMessage(getName(), "end", 0, onError ? "error" : "successful", DateUtil.formatDateTime(workflowStartTime),
+        DateUtil.formatDateTime(workflowEndTime), DateUtil.getDuration(workflowStartTime, workflowEndTime), null));
   }
 }
