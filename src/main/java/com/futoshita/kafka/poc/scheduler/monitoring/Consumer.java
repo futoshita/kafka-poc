@@ -47,7 +47,7 @@ public class Consumer {
         ConsumerRecords<String, byte[]> records = consumer.poll(200);
         
         if (records.isEmpty()) {
-          attempts --;
+          attempts--;
         }
         
         for (ConsumerRecord<String, byte[]> record : records) {

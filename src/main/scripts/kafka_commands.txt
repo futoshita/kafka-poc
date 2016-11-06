@@ -4,12 +4,11 @@ bin/kafka-server-start.sh config/server.properties
 
 bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic mock-scheduler
 
-bin/kafka-topics.sh --list --zookeeper localhost:2181
-
 bin/kafka-topics.sh --zookeeper localhost:2181 --delete --topic mock-scheduler
-
 avec delete.topic.enable=true dans server.properties
 
+
+bin/kafka-topics.sh --list --zookeeper localhost:2181
 
 consumer load balancing
 http://stackoverflow.com/questions/37148103/why-my-kafka-consumers-with-same-group-id-are-not-being-balanced
